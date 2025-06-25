@@ -8,7 +8,7 @@ const fs = require('fs');
 const {setupSwagger} = require('./config/swagger');
 require('./config/database');
 
-// Import the database pool for migration
+// Import the database pool for health checks
 const { pool } = require('./config/database');
 
 const userHomeRoutes = require('./routes/user/home');
@@ -44,99 +44,6 @@ const adminStudentRoutes = require('./routes/admin/studentManagement');
 const adminSettingRoutes = require('./routes/admin/setting');
 const adminTestRoutes = require('./routes/admin/test');
 
-// Auto-migration function
-async function checkAndRunMigration() {
-  let client;
-  
-  try {
-    client = await pool.connect();
-    console.log('🔍 Checking if database tables exist...');
-    
-    // Check if the users table exists
-    const tableCheck = await client.query(`
-      SELECT COUNT(*) as count 
-      FROM information_schema.tables 
-      WHERE table_schema = 'public' AND table_name = 'users'
-    `);
-    
-    const tableExists = parseInt(tableCheck.rows[0].count) > 0;
-    
-    if (!tableExists) {
-      console.log('📋 Tables not found. Running auto-migration...');
-      
-      // Try to find the migration file in different possible locations
-      const possiblePaths = [
-        path.join(__dirname, 'db/init.sql'),
-        path.join(__dirname, 'database/init.sql'),
-        path.join(__dirname, 'database/migration.sql'),
-        path.join(__dirname, 'scripts/init.sql')
-      ];
-      
-      let sqlPath = null;
-      for (const p of possiblePaths) {
-        if (fs.existsSync(p)) {
-          sqlPath = p;
-          break;
-        }
-      }
-      
-      if (sqlPath) {
-        console.log(`📖 Found migration file at: ${sqlPath}`);
-        const sqlContent = fs.readFileSync(sqlPath, 'utf8');
-        
-        console.log('🔄 Executing migration...');
-        await client.query('BEGIN');
-        await client.query(sqlContent);
-        await client.query('COMMIT');
-        
-        console.log('✅ Auto-migration completed successfully!');
-        
-        // Verify tables were created
-        const result = await client.query(`
-          SELECT table_name 
-          FROM information_schema.tables 
-          WHERE table_schema = 'public' 
-          ORDER BY table_name
-        `);
-        
-        console.log(`🎉 Created ${result.rows.length} tables:`, result.rows.map(r => r.table_name).join(', '));
-        
-      } else {
-        console.log('⚠️ Migration file not found. Looked in:');
-        possiblePaths.forEach(p => console.log(`   - ${p}`));
-        console.log('Please create a migration file with your database schema.');
-      }
-    } else {
-      console.log('✅ Database tables already exist');
-      
-      // Log existing tables for verification
-      const result = await client.query(`
-        SELECT table_name 
-        FROM information_schema.tables 
-        WHERE table_schema = 'public' 
-        ORDER BY table_name
-      `);
-      console.log(`📊 Found ${result.rows.length} existing tables`);
-    }
-    
-  } catch (error) {
-    if (client) {
-      try {
-        await client.query('ROLLBACK');
-      } catch (rollbackError) {
-        console.error('❌ Rollback failed:', rollbackError.message);
-      }
-    }
-    console.error('❌ Auto-migration failed:', error.message);
-    console.error('🔧 This might be expected if running locally. Check your database connection.');
-    // Don't crash the app in production - just log the error
-  } finally {
-    if (client) {
-      client.release();
-    }
-  }
-}
-
 // Create upload directories
 const uploadsDir = path.join(__dirname, 'uploads');
 const courseThumbsDir = path.join(__dirname, 'uploads/course-thumbnails');
@@ -154,9 +61,9 @@ app.use('/uploads/gallery', express.static(path.join(__dirname, 'public/uploads/
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 app.use('/uploads/course-thumbnails', express.static(path.join(__dirname, 'uploads/course-thumbnails')));
 
-// CORS Configuration - Fixed
+// CORS Configuration
 const allowedOrigins = [
-  // Production domains (REMOVE trailing slashes!)
+  // Production domains
   'https://rvu-frontend.vercel.app',
   'https://rvu-frontend-git-master-tonys-projects-b0aa070e.vercel.app',
   'https://rvu-frontend-quvlqv6sp-tonys-projects-b0aa070e.vercel.app',
@@ -171,7 +78,7 @@ const allowedOrigins = [
   'http://127.0.0.1:5173'
 ];
 
-// Enhanced CORS setup
+// CORS setup
 app.use(cors({
   origin: function (origin, callback) {
     // Allow requests with no origin (mobile apps, curl, etc.)
@@ -261,22 +168,6 @@ app.get('/health', async (req, res) => {
       tables: dbTables
     }
   });
-});
-
-// Database migration endpoint (for manual trigger)
-app.get('/api/migrate', async (req, res) => {
-  try {
-    await checkAndRunMigration();
-    res.json({
-      success: true,
-      message: 'Migration check completed successfully'
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      error: error.message
-    });
-  }
 });
 
 // Debug endpoint for uploads
@@ -369,7 +260,6 @@ app.use((req, res, next) => {
     availableRoutes: [
       'GET /health',
       'GET /api/cors-check',
-      'GET /api/migrate',
       'GET /debug/uploads',
       'GET /api-docs'
     ]
@@ -395,12 +285,5 @@ app.use((err, req, res, next) => {
     ...(process.env.NODE_ENV === 'development' && { stack: err.stack })
   });
 });
-
-
-if (process.env.NODE_ENV === 'production' || process.env.RUN_MIGRATION === 'true') {
-  setTimeout(() => {
-    checkAndRunMigration();
-  }, 2000);
-}
 
 module.exports = app;
