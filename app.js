@@ -58,8 +58,7 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 app.use('/uploads/course-thumbnails', express.static(path.join(__dirname, 'uploads/course-thumbnails')));
 
 const allowedOrigins = [
-  'https://rvu-lms-frontend.vercel.app',
-  'https://rvu-lms-frontend.vercel.app/' 
+  'https://rvu-frontend.vercel.app/', 
 ];
 
 if (process.env.NODE_ENV === 'development') {
