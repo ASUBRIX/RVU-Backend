@@ -30,7 +30,7 @@ const options = {
         description: 'Development server'
       },
       {
-        url: 'https://server.pudhuyugamacademy.com',
+        url: 'https://rvu-backend.onrender.com',
         description: 'Production server'
       }
     ],

@@ -74,9 +74,10 @@ console.log('   - Course thumbnails:', path.join(__dirname, 'uploads/course-thum
 console.log('   - All uploads:', path.join(__dirname, 'uploads'));
 
 const allowedOrigins = [
-  'https://rvu-lms-frontend.vercel.app/'];
+  'https://rvu-lms-frontend.vercel.app',
+  'https://rvu-lms-frontend.vercel.app/' 
+];
 
-// Add localhost origins in development
 if (process.env.NODE_ENV === 'development') {
   allowedOrigins.push(
     'http://localhost:4001',
@@ -95,7 +96,7 @@ app.options('*', cors());
 
 app.use(cookieParser());
 
-// Additional middleware
+
 app.set('views', path.join(__dirname, 'views'));
 app.set('view engine', 'ejs');
 app.use(morgan('dev', {skip: function (req, res) {return req.path === '/health';}}));
@@ -120,7 +121,7 @@ app.get('/debug/uploads', (req, res) => {
         gallery: galleryDir
       },
       files: {
-        thumbnails: thumbnailFiles.slice(0, 10), // Show first 10 files
+        thumbnails: thumbnailFiles.slice(0, 10), 
         gallery: galleryFiles.slice(0, 10)
       },
       sampleUrls: {

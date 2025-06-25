@@ -79,7 +79,7 @@ const blogController = require('../../controllers/user/blogController');
  *                     author: "Dr. Sarah Johnson"
  *                     excerpt: "Exploring how technology is reshaping education"
  *                     content: "In today's digital age, online learning has become more important than ever..."
- *                     image_url: "https://server.pudhuyugamacademy.com/uploads/blogs/future-learning.jpg"
+ *                     image_url: "https://rvu-backend.onrender.com/uploads/blogs/future-learning.jpg"
  *                     tags: ["education", "technology"]
  *                     is_published: true
  *                     created_at: "2023-12-15T10:30:00.000Z"
@@ -90,7 +90,7 @@ const blogController = require('../../controllers/user/blogController');
  *                     author: "Prof. Raj Kumar"
  *                     excerpt: "Why self-paced learning is effective for students"
  *                     content: "Self-paced learning allows students to learn at their own speed..."
- *                     image_url: "https://server.pudhuyugamacademy.com/uploads/blogs/self-paced.jpg"
+ *                     image_url: "https://rvu-backend.onrender.com/uploads/blogs/self-paced.jpg"
  *                     tags: ["learning", "education"]
  *                     is_published: true
  *                     created_at: "2023-12-10T08:15:00.000Z"
@@ -165,7 +165,7 @@ router.get('/', blogController.getAllPublishedBlogs);
  *                   type: string
  *                   nullable: true
  *                   description: Blog featured image URL
- *                   example: "https://server.pudhuyugamacademy.com/uploads/blogs/future-learning.jpg"
+ *                   example: "https://rvu-backend.onrender.com/uploads/blogs/future-learning.jpg"
  *                 tags:
  *                   type: array
  *                   items:
@@ -196,7 +196,7 @@ router.get('/', blogController.getAllPublishedBlogs);
  *                   author: "Dr. Sarah Johnson"
  *                   excerpt: "Exploring how technology is reshaping education"
  *                   content: "In today's digital age, online learning has become more important than ever. With the rapid advancement of technology, educational institutions are embracing digital platforms to deliver quality education to students worldwide..."
- *                   image_url: "https://server.pudhuyugamacademy.com/uploads/blogs/future-learning.jpg"
+ *                   image_url: "https://rvu-backend.onrender.com/uploads/blogs/future-learning.jpg"
  *                   tags: ["education", "technology", "online-learning"]
  *                   is_published: true
  *                   created_at: "2023-12-15T10:30:00.000Z"

@@ -49,12 +49,12 @@ const bannerController = require('../../controllers/user/bannerController');
  *                   - id: 1
  *                     title: "New Year Special - 50% Off"
  *                     description: "Get 50% discount on all courses this New Year"
- *                     image_url: "https://server.pudhuyugamacademy.com/uploads/banners/newyear-banner.jpg"
+ *                     image_url: "https://rvu-backend.onrender.com/uploads/banners/newyear-banner.jpg"
  *                     link: "/courses"
  *                   - id: 2
  *                     title: "Free Demo Classes Available"
  *                     description: "Book your free demo class today"
- *                     image_url: "https://server.pudhuyugamacademy.com/uploads/banners/demo-banner.jpg"
+ *                     image_url: "https://rvu-backend.onrender.com/uploads/banners/demo-banner.jpg"
  *                     link: "/contact"
  *               empty:
  *                 summary: No active banners
