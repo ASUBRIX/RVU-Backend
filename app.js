@@ -8,7 +8,7 @@ const fs = require('fs');
 const {setupSwagger} = require('./config/swagger');
 require('./config/database');
 
-// Import user routes
+
 const userHomeRoutes = require('./routes/user/home');
 const userEnquiryRoutes = require('./routes/user/enquiry');
 const userRoutes = require('./routes/user/user');
@@ -24,7 +24,6 @@ const userInstructorRoutes = require('./routes/user/instructor');
 const userSettingsRoutes = require('./routes/user/settings');
 const userLegalRoutes = require('./routes/user/legal');
 
-// Import admin routes
 const adminRoutes = require('./routes/admin/admin');
 const adminAnnouncementRoutes = require('./routes/admin/announcement');
 const adminBannerRoutes = require('./routes/admin/banner');
@@ -43,35 +42,20 @@ const adminStudentRoutes = require('./routes/admin/studentManagement');
 const adminSettingRoutes = require('./routes/admin/setting');
 const adminTestRoutes = require('./routes/admin/test');
 
-// 🔥 Create uploads directories if they don't exist
+
 const uploadsDir = path.join(__dirname, 'uploads');
 const courseThumbsDir = path.join(__dirname, 'uploads/course-thumbnails');
 const galleryDir = path.join(__dirname, 'public/uploads/gallery');
-
-// Create directories
 [uploadsDir, courseThumbsDir, galleryDir].forEach(dir => {
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true });
     console.log(`📁 Created directory: ${dir}`);
   }
 });
-
-// 🔥 Static files configuration
 app.use(express.static(path.join(__dirname, 'public')));
-
-// Existing gallery uploads
 app.use('/uploads/gallery', express.static(path.join(__dirname, 'public/uploads/gallery')));
-
-// 🔥 NEW: Course thumbnails static serving
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 app.use('/uploads/course-thumbnails', express.static(path.join(__dirname, 'uploads/course-thumbnails')));
-
-// Log static file configuration
-console.log('📁 Static files configuration:');
-console.log('   - Public files:', path.join(__dirname, 'public'));
-console.log('   - Gallery uploads:', path.join(__dirname, 'public/uploads/gallery'));
-console.log('   - Course thumbnails:', path.join(__dirname, 'uploads/course-thumbnails'));
-console.log('   - All uploads:', path.join(__dirname, 'uploads'));
 
 const allowedOrigins = [
   'https://rvu-lms-frontend.vercel.app',
@@ -103,11 +87,7 @@ app.use(morgan('dev', {skip: function (req, res) {return req.path === '/health';
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ limit: '10mb', extended: false }));
 app.use(cookieParser());
-
-// Health check
 app.get('/health', (req, res) => res.sendStatus(200));
-
-// 🔥 Debug endpoint for static files
 app.get('/debug/uploads', (req, res) => {
   try {
     const thumbnailFiles = fs.existsSync(courseThumbsDir) ? fs.readdirSync(courseThumbsDir) : [];
@@ -133,8 +113,6 @@ app.get('/debug/uploads', (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
-
-// Swagger setup
 setupSwagger(app);
 
 // User routes
@@ -172,9 +150,8 @@ app.use('/api/admin/students', adminStudentRoutes);
 app.use('/api/admin/settings', adminSettingRoutes);
 app.use('/api/admin/test', adminTestRoutes);
 
-// 404 handler
+
 app.use((req, res, next) => {
-  // Log 404s for uploads to help debug
   if (req.path.startsWith('/uploads/')) {
     console.log(`❌ 404 for upload file: ${req.path}`);
     console.log(`   Requested file: ${path.join(__dirname, req.path)}`);
@@ -187,8 +164,6 @@ app.use((req, res, next) => {
     documentation: '/api-docs'
   });
 });
-
-// Global error handler
 app.use((err, req, res, next) => {
   console.error('❌ Global error:', err.stack);
   res.status(500).json({
