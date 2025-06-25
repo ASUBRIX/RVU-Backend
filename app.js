@@ -396,9 +396,8 @@ app.use((err, req, res, next) => {
   });
 });
 
-// Run migration check on startup (only in production)
+
 if (process.env.NODE_ENV === 'production' || process.env.RUN_MIGRATION === 'true') {
-  // Add a small delay to ensure database connection is ready
   setTimeout(() => {
     checkAndRunMigration();
   }, 2000);
