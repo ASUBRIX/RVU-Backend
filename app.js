@@ -8,6 +8,8 @@ const fs = require('fs');
 const {setupSwagger} = require('./config/swagger');
 require('./config/database');
 
+// Import the database pool for migration
+const { pool } = require('./config/database');
 
 const userHomeRoutes = require('./routes/user/home');
 const userEnquiryRoutes = require('./routes/user/enquiry');
@@ -42,7 +44,100 @@ const adminStudentRoutes = require('./routes/admin/studentManagement');
 const adminSettingRoutes = require('./routes/admin/setting');
 const adminTestRoutes = require('./routes/admin/test');
 
+// Auto-migration function
+async function checkAndRunMigration() {
+  let client;
+  
+  try {
+    client = await pool.connect();
+    console.log('🔍 Checking if database tables exist...');
+    
+    // Check if the users table exists
+    const tableCheck = await client.query(`
+      SELECT COUNT(*) as count 
+      FROM information_schema.tables 
+      WHERE table_schema = 'public' AND table_name = 'users'
+    `);
+    
+    const tableExists = parseInt(tableCheck.rows[0].count) > 0;
+    
+    if (!tableExists) {
+      console.log('📋 Tables not found. Running auto-migration...');
+      
+      // Try to find the migration file in different possible locations
+      const possiblePaths = [
+        path.join(__dirname, 'db/init.sql'),
+        path.join(__dirname, 'database/init.sql'),
+        path.join(__dirname, 'database/migration.sql'),
+        path.join(__dirname, 'scripts/init.sql')
+      ];
+      
+      let sqlPath = null;
+      for (const p of possiblePaths) {
+        if (fs.existsSync(p)) {
+          sqlPath = p;
+          break;
+        }
+      }
+      
+      if (sqlPath) {
+        console.log(`📖 Found migration file at: ${sqlPath}`);
+        const sqlContent = fs.readFileSync(sqlPath, 'utf8');
+        
+        console.log('🔄 Executing migration...');
+        await client.query('BEGIN');
+        await client.query(sqlContent);
+        await client.query('COMMIT');
+        
+        console.log('✅ Auto-migration completed successfully!');
+        
+        // Verify tables were created
+        const result = await client.query(`
+          SELECT table_name 
+          FROM information_schema.tables 
+          WHERE table_schema = 'public' 
+          ORDER BY table_name
+        `);
+        
+        console.log(`🎉 Created ${result.rows.length} tables:`, result.rows.map(r => r.table_name).join(', '));
+        
+      } else {
+        console.log('⚠️ Migration file not found. Looked in:');
+        possiblePaths.forEach(p => console.log(`   - ${p}`));
+        console.log('Please create a migration file with your database schema.');
+      }
+    } else {
+      console.log('✅ Database tables already exist');
+      
+      // Log existing tables for verification
+      const result = await client.query(`
+        SELECT table_name 
+        FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        ORDER BY table_name
+      `);
+      console.log(`📊 Found ${result.rows.length} existing tables`);
+    }
+    
+  } catch (error) {
+    if (client) {
+      try {
+        await client.query('ROLLBACK');
+      } catch (rollbackError) {
+        console.error('❌ Rollback failed:', rollbackError.message);
+      }
+    }
+    console.error('❌ Auto-migration failed:', error.message);
+    console.error('🔧 This might be expected if running locally. Check your database connection.');
+    // Don't crash the app in production - just log the error
+  } finally {
+    if (client) {
+      client.release();
+    }
+  }
+}
 
+// Create upload directories
 const uploadsDir = path.join(__dirname, 'uploads');
 const courseThumbsDir = path.join(__dirname, 'uploads/course-thumbnails');
 const galleryDir = path.join(__dirname, 'public/uploads/gallery');
@@ -52,41 +147,139 @@ const galleryDir = path.join(__dirname, 'public/uploads/gallery');
     console.log(`📁 Created directory: ${dir}`);
   }
 });
+
+// Static file serving
 app.use(express.static(path.join(__dirname, 'public')));
 app.use('/uploads/gallery', express.static(path.join(__dirname, 'public/uploads/gallery')));
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 app.use('/uploads/course-thumbnails', express.static(path.join(__dirname, 'uploads/course-thumbnails')));
 
+// CORS Configuration - Fixed
 const allowedOrigins = [
-  'https://rvu-frontend.vercel.app/', 
+  // Production domains (REMOVE trailing slashes!)
+  'https://rvu-frontend.vercel.app',
+  'https://rvu-frontend-git-master-tonys-projects-b0aa070e.vercel.app',
+  'https://rvu-frontend-quvlqv6sp-tonys-projects-b0aa070e.vercel.app',
+  
+  // Vercel preview deployments pattern
+  /^https:\/\/rvu-frontend-.*\.vercel\.app$/,
+  
+  // Development
+  'http://localhost:3000',
+  'http://localhost:5173',
+  'http://127.0.0.1:3000',
+  'http://127.0.0.1:5173'
 ];
 
-if (process.env.NODE_ENV === 'development') {
-  allowedOrigins.push(
-    'http://localhost:4001',
-    'http://127.0.0.1:4001'
-  );
-}
-
+// Enhanced CORS setup
 app.use(cors({
-  origin: allowedOrigins,
+  origin: function (origin, callback) {
+    // Allow requests with no origin (mobile apps, curl, etc.)
+    if (!origin) return callback(null, true);
+    
+    // Check if origin is in allowed list
+    const isAllowed = allowedOrigins.some(allowedOrigin => {
+      if (typeof allowedOrigin === 'string') {
+        return origin === allowedOrigin;
+      }
+      // For regex patterns
+      return allowedOrigin.test(origin);
+    });
+    
+    if (isAllowed) {
+      callback(null, true);
+    } else {
+      console.warn(`🚫 CORS blocked origin: ${origin}`);
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'auth_key']
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+  allowedHeaders: [
+    'Content-Type', 
+    'Authorization', 
+    'auth_key',
+    'X-Requested-With',
+    'Accept',
+    'Origin',
+    'Cache-Control'
+  ],
+  exposedHeaders: ['Set-Cookie'],
+  maxAge: 86400 // 24 hours
 }));
 
+// Handle preflight requests
 app.options('*', cors());
 
+// Trust proxy for Render deployment
+app.set('trust proxy', 1);
+
+// Middleware setup
 app.use(cookieParser());
-
-
 app.set('views', path.join(__dirname, 'views'));
 app.set('view engine', 'ejs');
-app.use(morgan('dev', {skip: function (req, res) {return req.path === '/health';}}));
+
+// Morgan logging (skip health checks)
+app.use(morgan('combined', {
+  skip: function (req, res) {
+    return req.path === '/health' || req.path === '/favicon.ico';
+  }
+}));
+
+// Body parsing middleware
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ limit: '10mb', extended: false }));
-app.use(cookieParser());
-app.get('/health', (req, res) => res.sendStatus(200));
+
+// Health check endpoint with database status
+app.get('/health', async (req, res) => {
+  let dbStatus = 'unknown';
+  let dbTables = 0;
+  
+  try {
+    const client = await pool.connect();
+    const result = await client.query('SELECT NOW()');
+    const tableResult = await client.query(`
+      SELECT COUNT(*) as count 
+      FROM information_schema.tables 
+      WHERE table_schema = 'public'
+    `);
+    dbTables = parseInt(tableResult.rows[0].count);
+    dbStatus = 'connected';
+    client.release();
+  } catch (error) {
+    dbStatus = 'disconnected';
+    console.error('Health check DB error:', error.message);
+  }
+  
+  res.status(200).json({
+    status: 'OK',
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+    environment: process.env.NODE_ENV || 'development',
+    database: {
+      status: dbStatus,
+      tables: dbTables
+    }
+  });
+});
+
+// Database migration endpoint (for manual trigger)
+app.get('/api/migrate', async (req, res) => {
+  try {
+    await checkAndRunMigration();
+    res.json({
+      success: true,
+      message: 'Migration check completed successfully'
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// Debug endpoint for uploads
 app.get('/debug/uploads', (req, res) => {
   try {
     const thumbnailFiles = fs.existsSync(courseThumbsDir) ? fs.readdirSync(courseThumbsDir) : [];
@@ -112,7 +305,19 @@ app.get('/debug/uploads', (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
+
+// Setup Swagger documentation
 setupSwagger(app);
+
+// API endpoint to check CORS
+app.get('/api/cors-check', (req, res) => {
+  res.json({
+    message: 'CORS is working!',
+    origin: req.get('Origin'),
+    userAgent: req.get('User-Agent'),
+    timestamp: new Date().toISOString()
+  });
+});
 
 // User routes
 app.use('/api', userHomeRoutes);
@@ -149,7 +354,7 @@ app.use('/api/admin/students', adminStudentRoutes);
 app.use('/api/admin/settings', adminSettingRoutes);
 app.use('/api/admin/test', adminTestRoutes);
 
-
+// 404 handler
 app.use((req, res, next) => {
   if (req.path.startsWith('/uploads/')) {
     console.log(`❌ 404 for upload file: ${req.path}`);
@@ -160,15 +365,43 @@ app.use((req, res, next) => {
   res.status(404).json({ 
     error: 'Endpoint not found',
     message: `The endpoint ${req.method} ${req.path} does not exist`,
-    documentation: '/api-docs'
+    documentation: '/api-docs',
+    availableRoutes: [
+      'GET /health',
+      'GET /api/cors-check',
+      'GET /api/migrate',
+      'GET /debug/uploads',
+      'GET /api-docs'
+    ]
   });
 });
+
+// Global error handler
 app.use((err, req, res, next) => {
   console.error('❌ Global error:', err.stack);
-  res.status(500).json({
+  
+  // CORS error
+  if (err.message === 'Not allowed by CORS') {
+    return res.status(403).json({
+      error: 'CORS Error',
+      message: 'Origin not allowed. Please check your domain configuration.',
+      origin: req.get('Origin')
+    });
+  }
+  
+  res.status(err.status || 500).json({
     error: 'Internal server error',
-    message: process.env.NODE_ENV === 'development' ? err.message : 'Something went wrong'
+    message: process.env.NODE_ENV === 'development' ? err.message : 'Something went wrong',
+    ...(process.env.NODE_ENV === 'development' && { stack: err.stack })
   });
 });
+
+// Run migration check on startup (only in production)
+if (process.env.NODE_ENV === 'production' || process.env.RUN_MIGRATION === 'true') {
+  // Add a small delay to ensure database connection is ready
+  setTimeout(() => {
+    checkAndRunMigration();
+  }, 2000);
+}
 
 module.exports = app;
