@@ -31,3 +31,7 @@ build/
 # Cache
 .npm/
 .cache/
+serviceAccountKey.json
+*.json
+.env
+.env.*
