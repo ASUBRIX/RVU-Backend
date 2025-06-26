@@ -1,6 +1,5 @@
 const admin = require('firebase-admin');
 
-// Use environment variables instead of JSON file
 const serviceAccount = {
   type: "service_account",
   project_id: process.env.FIREBASE_PROJECT_ID,
