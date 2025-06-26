@@ -8,7 +8,6 @@ const fs = require('fs');
 const {setupSwagger} = require('./config/swagger');
 require('./config/database');
 
-// Import the database pool for health checks
 const { pool } = require('./config/database');
 
 const userHomeRoutes = require('./routes/user/home');
@@ -44,7 +43,6 @@ const adminStudentRoutes = require('./routes/admin/studentManagement');
 const adminSettingRoutes = require('./routes/admin/setting');
 const adminTestRoutes = require('./routes/admin/test');
 
-// Create upload directories
 const uploadsDir = path.join(__dirname, 'uploads');
 const courseThumbsDir = path.join(__dirname, 'uploads/course-thumbnails');
 const galleryDir = path.join(__dirname, 'public/uploads/gallery');
@@ -55,41 +53,30 @@ const galleryDir = path.join(__dirname, 'public/uploads/gallery');
   }
 });
 
-// Static file serving
 app.use(express.static(path.join(__dirname, 'public')));
 app.use('/uploads/gallery', express.static(path.join(__dirname, 'public/uploads/gallery')));
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 app.use('/uploads/course-thumbnails', express.static(path.join(__dirname, 'uploads/course-thumbnails')));
 
-// CORS Configuration
 const allowedOrigins = [
-  // Production domains
   'https://rvu-frontend.vercel.app',
   'https://rvu-frontend-git-master-tonys-projects-b0aa070e.vercel.app',
   'https://rvu-frontend-quvlqv6sp-tonys-projects-b0aa070e.vercel.app',
-  
-  // Vercel preview deployments pattern
   /^https:\/\/rvu-frontend-.*\.vercel\.app$/,
-  
-  // Development
-  'http://localhost:3000',
-  'http://localhost:5173',
-  'http://127.0.0.1:3000',
-  'http://127.0.0.1:5173'
+  'http://localhost:4001',
+  'http://127.0.0.1:4001',
+  'http://localhost:5001',
+  'http://127.0.0.1:5001'
 ];
 
-// CORS setup
 app.use(cors({
   origin: function (origin, callback) {
-    // Allow requests with no origin (mobile apps, curl, etc.)
     if (!origin) return callback(null, true);
     
-    // Check if origin is in allowed list
     const isAllowed = allowedOrigins.some(allowedOrigin => {
       if (typeof allowedOrigin === 'string') {
         return origin === allowedOrigin;
       }
-      // For regex patterns
       return allowedOrigin.test(origin);
     });
     
@@ -112,32 +99,36 @@ app.use(cors({
     'Cache-Control'
   ],
   exposedHeaders: ['Set-Cookie'],
-  maxAge: 86400 // 24 hours
+  maxAge: 86400,
+  preflightContinue: false,
+  optionsSuccessStatus: 204
 }));
 
-// Handle preflight requests
-app.options('*', cors());
+app.options('*', (req, res) => {
+  console.log(`OPTIONS ${req.path} from ${req.get('Origin')}`);
+  res.header('Access-Control-Allow-Origin', req.get('Origin'));
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, auth_key, X-Requested-With, Accept, Origin, Cache-Control');
+  res.header('Access-Control-Allow-Credentials', 'true');
+  res.header('Access-Control-Max-Age', '86400');
+  res.sendStatus(204);
+});
 
-// Trust proxy for Render deployment
 app.set('trust proxy', 1);
 
-// Middleware setup
 app.use(cookieParser());
 app.set('views', path.join(__dirname, 'views'));
 app.set('view engine', 'ejs');
 
-// Morgan logging (skip health checks)
-app.use(morgan('combined', {
+app.use(morgan('dev', {
   skip: function (req, res) {
     return req.path === '/health' || req.path === '/favicon.ico';
   }
 }));
 
-// Body parsing middleware
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ limit: '10mb', extended: false }));
 
-// Health check endpoint with database status
 app.get('/health', async (req, res) => {
   let dbStatus = 'unknown';
   let dbTables = 0;
@@ -158,6 +149,7 @@ app.get('/health', async (req, res) => {
     console.error('Health check DB error:', error.message);
   }
   
+  res.header('Access-Control-Allow-Origin', '*');
   res.status(200).json({
     status: 'OK',
     timestamp: new Date().toISOString(),
@@ -170,12 +162,12 @@ app.get('/health', async (req, res) => {
   });
 });
 
-// Debug endpoint for uploads
 app.get('/debug/uploads', (req, res) => {
   try {
     const thumbnailFiles = fs.existsSync(courseThumbsDir) ? fs.readdirSync(courseThumbsDir) : [];
     const galleryFiles = fs.existsSync(galleryDir) ? fs.readdirSync(galleryDir) : [];
     
+    res.header('Access-Control-Allow-Origin', '*');
     res.json({
       message: 'Static files debug info',
       directories: {
@@ -197,11 +189,10 @@ app.get('/debug/uploads', (req, res) => {
   }
 });
 
-// Setup Swagger documentation
 setupSwagger(app);
 
-// API endpoint to check CORS
 app.get('/api/cors-check', (req, res) => {
+  res.header('Access-Control-Allow-Origin', req.get('Origin') || '*');
   res.json({
     message: 'CORS is working!',
     origin: req.get('Origin'),
@@ -210,7 +201,6 @@ app.get('/api/cors-check', (req, res) => {
   });
 });
 
-// User routes
 app.use('/api', userHomeRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/student/profile', studentProfileRoutes);
@@ -226,7 +216,6 @@ app.use('/api/slides', slidesRoutes);
 app.use('/api/legal', userLegalRoutes);
 app.use('/api/notice-board', userNoticeBoardRoutes);
 
-// Admin routes
 app.use('/api/admin/login', adminRoutes);
 app.use('/api/admin/announcements', adminAnnouncementRoutes);
 app.use('/api/admin/banners', adminBannerRoutes);
@@ -245,7 +234,6 @@ app.use('/api/admin/students', adminStudentRoutes);
 app.use('/api/admin/settings', adminSettingRoutes);
 app.use('/api/admin/test', adminTestRoutes);
 
-// 404 handler
 app.use((req, res, next) => {
   if (req.path.startsWith('/uploads/')) {
     console.log(`❌ 404 for upload file: ${req.path}`);
@@ -266,11 +254,9 @@ app.use((req, res, next) => {
   });
 });
 
-// Global error handler
 app.use((err, req, res, next) => {
   console.error('❌ Global error:', err.stack);
   
-  // CORS error
   if (err.message === 'Not allowed by CORS') {
     return res.status(403).json({
       error: 'CORS Error',
